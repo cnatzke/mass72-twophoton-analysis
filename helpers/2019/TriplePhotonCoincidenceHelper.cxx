@@ -6,9 +6,9 @@ Double_t betaGammaTimingOffset = 277.01;
 
 // -- delayed window
 Int_t twoPhotonCoincidenceTime = 90;   // ns, max time diff for two-photon events
-Int_t delayedBetaTagWindowStart = 90;  // ns
-Int_t delayedBetaTagWindowWidth = 970; // ns
-Int_t delayedBetaTagWindowEnd = delayedBetaTagWindowStart + delayedBetaTagWindowWidth;
+Int_t gateGammaDelayWindowStart = 90;  // ns
+Int_t gateGammaDelayWindowWidth = 970; // ns
+Int_t gateGammaDelayWindowEnd = gateGammaDelayWindowStart + gateGammaDelayWindowWidth;
 
 // -- time random window
 Int_t timeRandomGateMin = 1000;
@@ -45,26 +45,34 @@ bool DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two)
 void TriplePhotonCoincidenceHelper::CreateHistograms(unsigned int slot)
 {
    //* ------- Energy -------
-   fH2[slot]["gggSumEnergy"] = new TH2D("gggSumEnergy", "#gamma-#gamma#gamma sum energy |#Delta t| < 90ns;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gggSumEnergyTimeRandom"] = new TH2D("gggSumEnergyTimeRandom", "#gamma-#gamma#gamma sum energy |#Delta t| [1000,2000]ns;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
    fH2[slot]["gEChannel"] = new TH2D("gEChannel", "HPGe crystal number vs #gamma energy", 65, 0., 65., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+
+   fH2[slot]["gggSumEnergy"] = new TH2D("gggSumEnergy", "#gamma-#gamma#gamma sum energy |#Deltat| < 90ns, delayed;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggSumEnergyTimeRandom"] = new TH2D("gggSumEnergyTimeRandom", "#gamma-#gamma#gamma sum energy |#Delta t| [1000,2000]ns, delayed;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+
+   fH2[slot]["gggSumEnergyPrompt"] = new TH2D("gggSumEnergyPrompt", "#gamma-#gamma#gamma sum energy |#Deltat| < 90ns, no delay;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggSumEnergyPromptTimeRandom"] = new TH2D("gggSumEnergyPromptTimeRandom", "#gamma-#gamma#gamma sum energy |#Delta t| [1000,2000]ns, no delay;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    // --- energy gate
    fH2[slot]["gggSumEnergyGated"] = new TH2D("gggSumEnergyGated", Form("#gamma_{1}-#gamma#gamma sum energy |#Deltat| < 90ns, gated on %ikeV;#gamma_{1};Sum energy", (int)tripleGammaGateEnergy), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
    fH2[slot]["gggSumEnergyGatedTimeRandom"] = new TH2D("gggSumEnergyGatedTimeRandom", Form("#gamma_{1}-#gamma#gamma sum energy |#Deltat| [1000,2000]ns, gated on %ikeV;#gamma_{1};Sum energy", (int)tripleGammaGateEnergy), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
+   fH2[slot]["gggSumEnergyGatedPrompt"] = new TH2D("gggSumEnergyGatedPrompt", Form("#gamma_{1}-#gamma#gamma sum energy |#Deltat| < 90ns, gated on %ikeV, no delay;#gamma_{1};Sum energy", (int)tripleGammaGateEnergy), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggSumEnergyGatedPromptTimeRandom"] = new TH2D("gggSumEnergyGatedPromptTimeRandom", Form("#gamma_{1}-#gamma#gamma sum energy |#Deltat| [1000,2000]ns, gated on %ikeV, no delay;#gamma_{1};Sum energy", (int)tripleGammaGateEnergy), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+
    // --- energy limit
    fH2[slot]["gggSumEnergyLimited"] = new TH2D("gggSumEnergyLimited", "#gamma-#gamma#gamma sum energy |#Deltat| < 90ns, energy limit;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
    fH2[slot]["gggSumEnergyLimitedTimeRandom"] = new TH2D("gggSumEnergyLimitedTimeRandom", "#gamma-#gamma#gamma sum energy |#Deltat| [1000,2000]ns, energy limit;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
-   // --- beta tagged
-   fH2[slot]["gEChannelBetaTagged"] = new TH2D("gEChannelBetaTagged", "HPGe crystal number vs #gamma energy (#beta-tagged)", 65, 0., 65., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gggSumEnergyBetaTagged"] = new TH2D("gggSumEnergyBetaTagged", "#gamma-#gamma#gamma sum energy #beta-tagged;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-
    //* ------- Timing -------
-   fH2[slot]["gggTiming"] = new TH2D("gggTiming", "#Deltat #gamma#gamma-#gamma", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gggTimingTimeRandom"] = new TH2D("gggTimingTimeRandom", "#Deltat #gamma#gamma-#gamma time-random", 4500, -2250, 2250, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggTiming"] = new TH2D("gggTiming", "#Deltat #gamma#gamma-#gamma, delayed", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggTimingTimeRandom"] = new TH2D("gggTimingTimeRandom", "#Deltat #gamma#gamma-#gamma time-random, delayed", 4500, -2250, 2250, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+
+   fH2[slot]["gggTimingTotal"] = new TH2D("gggTimingTotal", "#Deltat #gamma#gamma-#gamma", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggTimingTotalTimeRandom"] = new TH2D("gggTimingTotalTimeRandom", "#Deltat #gamma#gamma-#gamma", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+
    fH2[slot]["gggGatedTiming"] = new TH2D("gggGatedTiming", "#Deltat #gamma#gamma-#gamma", 4000, -1000, 3000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gggGatedTimingTimeRandom"] = new TH2D("gggGatedTimingTimeRandom", "#Deltat #gamma#gamma-#gamma, time random", 4000, -1000, 3000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Angles -------
 
@@ -92,36 +100,7 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
          continue;
       }
 
-      bool betaTag = false;
-      bool singleZDSHit = false;
-      for (int z1 = 0; z1 < zds.GetMultiplicity(); ++z1)
-      {
-         auto zds1 = zds.GetZeroDegreeHit(z1);
-
-         if (zds1->GetKValue() != zdsDefaultKValue)
-         {
-            continue;
-         }
-         // --- sets energy floor at minimum value;
-         if (zds1->GetEnergy() < zdsMinimumEnergy)
-         {
-            continue;
-         }
-
-         betaTag = true;
-
-         if (zds.GetMultiplicity() == 1)
-         {
-            singleZDSHit = true;
-         }
-      }
-
       fH2[slot].at("gEChannel")->Fill(grif1->GetArrayNumber(), calibratedEnergyGrif1);
-
-      if (betaTag)
-      {
-         fH2[slot].at("gEChannelBetaTagged")->Fill(grif1->GetArrayNumber(), calibratedEnergyGrif1);
-      }
 
       // --- Second gamma
       for (auto g2 = g1 + 1; g2 < grif.GetSuppressedMultiplicity(&grifBgo); ++g2)
@@ -174,6 +153,10 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
                continue;
             }
 
+            fH2[slot].at("gggHitPattern")->Fill(grif1->GetArrayNumber(), grif2->GetArrayNumber());
+            fH2[slot].at("gggHitPattern")->Fill(grif1->GetArrayNumber(), grif3->GetArrayNumber());
+            fH2[slot].at("gggHitPattern")->Fill(grif2->GetArrayNumber(), grif3->GetArrayNumber());
+
             auto g1g3AngleIndex = fAngleMap.lower_bound(g1g3Angle - 0.0005);
             double g1g3TimeDiff = grif3->GetTime() - grif1->GetTime();
 
@@ -193,34 +176,60 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
             if (sumTimeDiff < twoPhotonCoincidenceTime)
             {
                fH1[slot].at("gggCaseID")->Fill(caseID);
-               fH2[slot].at("gggTiming")->Fill(gateTimeDiff, sumEnergy);
-               fH2[slot].at("gggSumEnergy")->Fill(gateEnergy, sumEnergy);
+               fH2[slot].at("gggTimingTotal")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggSumEnergyPrompt")->Fill(gateEnergy, sumEnergy);
 
                if (totalSumEnergy < maximumTripleGammaSumEnergy)
                {
                   fH2[slot].at("gggSumEnergyLimited")->Fill(gateEnergy, sumEnergy);
-               }
+               } // --- end total energy gate
+
                if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
                {
                   fH2[slot].at("gggGatedTiming")->Fill(gateTimeDiff, sumEnergy);
-                  fH2[slot].at("gggSumEnergyGated")->Fill(calibratedEnergyGrif1, sumEnergy);
-               }
+                  fH2[slot].at("gggSumEnergyGatedPrompt")->Fill(calibratedEnergyGrif1, sumEnergy);
+               } // --- end energy gate
+
+               if (gateTimeDiff > gateGammaDelayWindowStart && gateTimeDiff < gateGammaDelayWindowEnd)
+               {
+                  fH2[slot].at("gggTiming")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergy")->Fill(calibratedEnergyGrif1, sumEnergy);
+
+                  if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
+                  {
+                     fH2[slot].at("gggSumEnergyGated")->Fill(calibratedEnergyGrif1, sumEnergy);
+                  } // --- end energy gate
+               }    // --- end delayed gamma gate
             }
             else if (sumTimeDiff > timeRandomGateMin && sumTimeDiff < timeRandomGateMax)
             {
                fH1[slot].at("gggCaseID")->Fill(caseID);
-               fH2[slot].at("gggTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
-               fH2[slot].at("gggSumEnergyTimeRandom")->Fill(gateEnergy, sumEnergy);
+               fH2[slot].at("gggTimingTotalTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggSumEnergyPromptTimeRandom")->Fill(gateEnergy, sumEnergy);
 
                if (totalSumEnergy < maximumTripleGammaSumEnergy)
                {
                   fH2[slot].at("gggSumEnergyLimitedTimeRandom")->Fill(gateEnergy, sumEnergy);
-               }
+               } // --- end total energy gate
+
                if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
                {
-                  fH2[slot].at("gggSumEnergyGatedTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
-               }
-            }
+                  fH2[slot].at("gggGatedTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergyGatedPromptTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+               } // --- end energy gate
+
+               if (gateTimeDiff > gateGammaDelayWindowStart && gateTimeDiff < gateGammaDelayWindowEnd)
+               {
+                  fH2[slot].at("gggTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergyTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+
+                  if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
+                  {
+                     fH2[slot].at("gggSumEnergyGatedTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+                  } // --- end energy gate
+               }    // --- end delayed gamma gate
+            }       // --- end time-random
+                    // --- end case 1
 
             // --- case 2: g1g3 - g2
             sumEnergy = calibratedEnergyGrif1 + calibratedEnergyGrif3;
@@ -231,34 +240,60 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
             if (sumTimeDiff < twoPhotonCoincidenceTime)
             {
                fH1[slot].at("gggCaseID")->Fill(caseID);
-               fH2[slot].at("gggSumEnergy")->Fill(gateEnergy, sumEnergy);
-               fH2[slot].at("gggTiming")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggTimingTotal")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggSumEnergyPrompt")->Fill(gateEnergy, sumEnergy);
 
                if (totalSumEnergy < maximumTripleGammaSumEnergy)
                {
                   fH2[slot].at("gggSumEnergyLimited")->Fill(gateEnergy, sumEnergy);
-               }
+               } // --- end total energy gate
+
                if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
                {
                   fH2[slot].at("gggGatedTiming")->Fill(gateTimeDiff, sumEnergy);
-                  fH2[slot].at("gggSumEnergyGated")->Fill(calibratedEnergyGrif1, sumEnergy);
-               }
+                  fH2[slot].at("gggSumEnergyGatedPrompt")->Fill(calibratedEnergyGrif1, sumEnergy);
+               } // --- end energy gate
+
+               if (gateTimeDiff > gateGammaDelayWindowStart && gateTimeDiff < gateGammaDelayWindowEnd)
+               {
+                  fH2[slot].at("gggTiming")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergy")->Fill(calibratedEnergyGrif1, sumEnergy);
+
+                  if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
+                  {
+                     fH2[slot].at("gggSumEnergyGated")->Fill(calibratedEnergyGrif1, sumEnergy);
+                  } // --- end energy gate
+               }    // --- end delayed gamma gate
             }
             else if (sumTimeDiff > timeRandomGateMin && sumTimeDiff < timeRandomGateMax)
             {
                fH1[slot].at("gggCaseID")->Fill(caseID);
-               fH2[slot].at("gggTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
-               fH2[slot].at("gggSumEnergyTimeRandom")->Fill(gateEnergy, sumEnergy);
+               fH2[slot].at("gggTimingTotalTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggSumEnergyPromptTimeRandom")->Fill(gateEnergy, sumEnergy);
 
                if (totalSumEnergy < maximumTripleGammaSumEnergy)
                {
                   fH2[slot].at("gggSumEnergyLimitedTimeRandom")->Fill(gateEnergy, sumEnergy);
-               }
+               } // --- end total energy gate
+
                if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
                {
-                  fH2[slot].at("gggSumEnergyGatedTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
-               }
-            }
+                  fH2[slot].at("gggGatedTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergyGatedPromptTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+               } // --- end energy gate
+
+               if (gateTimeDiff > gateGammaDelayWindowStart && gateTimeDiff < gateGammaDelayWindowEnd)
+               {
+                  fH2[slot].at("gggTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergyTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+
+                  if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
+                  {
+                     fH2[slot].at("gggSumEnergyGatedTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+                  } // --- end energy gate
+               }    // --- end delayed gamma gate
+            }       // --- end time-random
+            // --- end case 2
 
             // --- case 3: g2g3 - g1
             sumEnergy = calibratedEnergyGrif2 + calibratedEnergyGrif3;
@@ -269,38 +304,60 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
             if (sumTimeDiff < twoPhotonCoincidenceTime)
             {
                fH1[slot].at("gggCaseID")->Fill(caseID);
-               fH2[slot].at("gggSumEnergy")->Fill(gateEnergy, sumEnergy);
-               fH2[slot].at("gggTiming")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggTimingTotal")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggSumEnergyPrompt")->Fill(gateEnergy, sumEnergy);
 
                if (totalSumEnergy < maximumTripleGammaSumEnergy)
                {
                   fH2[slot].at("gggSumEnergyLimited")->Fill(gateEnergy, sumEnergy);
-               }
+               } // --- end total energy gate
+
                if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
                {
                   fH2[slot].at("gggGatedTiming")->Fill(gateTimeDiff, sumEnergy);
-                  fH2[slot].at("gggSumEnergyGated")->Fill(calibratedEnergyGrif2, sumEnergy);
-               }
+                  fH2[slot].at("gggSumEnergyGatedPrompt")->Fill(calibratedEnergyGrif1, sumEnergy);
+               } // --- end energy gate
+
+               if (gateTimeDiff > gateGammaDelayWindowStart && gateTimeDiff < gateGammaDelayWindowEnd)
+               {
+                  fH2[slot].at("gggTiming")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergy")->Fill(calibratedEnergyGrif1, sumEnergy);
+
+                  if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
+                  {
+                     fH2[slot].at("gggSumEnergyGated")->Fill(calibratedEnergyGrif1, sumEnergy);
+                  } // --- end energy gate
+               }    // --- end delayed gamma gate
             }
             else if (sumTimeDiff > timeRandomGateMin && sumTimeDiff < timeRandomGateMax)
             {
                fH1[slot].at("gggCaseID")->Fill(caseID);
-               fH2[slot].at("gggTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
-               fH2[slot].at("gggSumEnergyTimeRandom")->Fill(gateEnergy, sumEnergy);
+               fH2[slot].at("gggTimingTotalTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+               fH2[slot].at("gggSumEnergyPromptTimeRandom")->Fill(gateEnergy, sumEnergy);
 
                if (totalSumEnergy < maximumTripleGammaSumEnergy)
                {
                   fH2[slot].at("gggSumEnergyLimitedTimeRandom")->Fill(gateEnergy, sumEnergy);
-               }
+               } // --- end total energy gate
+
                if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
                {
-                  fH2[slot].at("gggSumEnergyGatedTimeRandom")->Fill(calibratedEnergyGrif2, sumEnergy);
-               }
-            }
+                  fH2[slot].at("gggGatedTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergyGatedPromptTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+               } // --- end energy gate
 
-            fH2[slot].at("gggHitPattern")->Fill(grif1->GetArrayNumber(), grif2->GetArrayNumber());
-            fH2[slot].at("gggHitPattern")->Fill(grif1->GetArrayNumber(), grif3->GetArrayNumber());
-            fH2[slot].at("gggHitPattern")->Fill(grif2->GetArrayNumber(), grif3->GetArrayNumber());
+               if (gateTimeDiff > gateGammaDelayWindowStart && gateTimeDiff < gateGammaDelayWindowEnd)
+               {
+                  fH2[slot].at("gggTimingTimeRandom")->Fill(gateTimeDiff, sumEnergy);
+                  fH2[slot].at("gggSumEnergyTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+
+                  if (gateEnergy > gateGammaEnergyLow && gateEnergy < gateGammaEnergyHigh)
+                  {
+                     fH2[slot].at("gggSumEnergyGatedTimeRandom")->Fill(calibratedEnergyGrif1, sumEnergy);
+                  } // --- end energy gate
+               }    // --- end delayed gamma gate
+            }       // --- end time-random
+                    // --- end case 3
 
          } // end third gamma
       }    // end second gamma
