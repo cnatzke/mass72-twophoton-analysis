@@ -1,5 +1,5 @@
-#ifndef TimingGateOptimizationHelper_h
-#define TimingGateOptimizationHelper_h
+#ifndef TriplePhotonCoincidenceHelper_h
+#define TriplePhotonCoincidenceHelper_h
 
 // Header file for the classes stored in the TTree if any.
 #include "TGriffin.h"
@@ -8,17 +8,6 @@
 #include "TGRSIHelper.h"
 
 #include "csv.h"
-
-struct comptonData
-{
-   double angle;
-   int angleIndex;
-   std::vector<int> energy;
-   std::vector<double> comptonLimit0;
-   std::vector<double> comptonLimit1;
-   std::vector<double> comptonLimit2;
-   std::vector<double> comptonLimit3;
-};
 
 struct Addback_t
 {
@@ -32,16 +21,11 @@ struct Addback_t
 // function to calculate angles (from LeanCorrelations), implemented at the end of this file
 std::vector<std::pair<double, int>> AngleCombinations(double distance = 145., bool folding = false,
                                                       bool addback = false);
-// Compton rejection stuff
-void ReadInComptonLimitsFile(std::string dataFile);
-std::vector<comptonData> BuildComptonBands(double energy_max = 4000);
 
 std::vector<float> fAngularBinVec;
-std::vector<float> fComptonLimits0;
-std::vector<float> fComptonLimits1;
 
-class TimingGateOptimizationHelper : public TGRSIHelper,
-                                     public ROOT::Detail::RDF::RActionImpl<TimingGateOptimizationHelper>
+class TriplePhotonCoincidenceHelper : public TGRSIHelper,
+                                      public ROOT::Detail::RDF::RActionImpl<TriplePhotonCoincidenceHelper>
 {
 private:
    std::vector<std::pair<double, int>> fAngleCombinations;
@@ -51,16 +35,12 @@ private:
 
    TGriffin fLastGrif;
 
-   std::vector<comptonData> fComptonMapping;
-   bool GetComptonTag(double energy1, double energy2, int index);
-   void GetComptonLimits(double energy, int index, std::vector<double> &vec);
    double ApplySplitCalibration(TGriffinHit *grifHit);
    bool DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two);
    Addback_t GetAddback(TGriffin &grif, TGriffinBgo &grifBgo);
-   bool HasDuplicate(const std::vector<int> &vec);
 
 public:
-   TimingGateOptimizationHelper(TList *list) : TGRSIHelper(list)
+   TriplePhotonCoincidenceHelper(TList *list) : TGRSIHelper(list)
    {
       Prefix("run");
       // calculate angle combinations
@@ -75,11 +55,6 @@ public:
          fAngleMapAddback.insert(std::make_pair(fAngleCombinationsAddback[i].first, i));
       }
 
-      // build Compton scatter limits
-      std::string comptonLimitsDataFile = "/data_fast/cnatzke/two-photon/72Ge/data/compton_limits_145mm.csv";
-      ReadInComptonLimitsFile(comptonLimitsDataFile);
-      fComptonMapping = BuildComptonBands(5000);
-
       // Setup calls CreateHistograms, which uses the stored angle combinations, so we need those set before
       Setup();
    }
@@ -93,7 +68,7 @@ public:
 #endif
 
 // These are needed functions used by TDataFrameLibrary to create and destroy the instance of this TimingInvestigationHelper
-extern "C" TimingGateOptimizationHelper *CreateHelper(TList *list) { return new TimingGateOptimizationHelper(list); }
+extern "C" TriplePhotonCoincidenceHelper *CreateHelper(TList *list) { return new TriplePhotonCoincidenceHelper(list); }
 
 extern "C" void DestroyHelper(TGRSIHelper *helper) { delete helper; }
 
@@ -209,130 +184,3 @@ std::vector<std::pair<double, int>> AngleCombinations(double distance, bool fold
 
    return result;
 }
-
-/****************************************************************
- * Reads in csv file with Compton scattering bands
- *
- * @param filepath Filepath to csv file
- ***************************************************************/
-void ReadInComptonLimitsFile(std::string dataFile)
-{
-
-   std::fstream compton_limit_file;
-
-   compton_limit_file.open(dataFile, std::ios_base::in);
-   // if bg file doesn't exist, throw error
-   if (!compton_limit_file)
-   {
-      compton_limit_file.close();
-      std::cout << "Could not open " << dataFile << ", exiting." << std::endl;
-      exit(EXIT_FAILURE);
-   }
-   else
-   {
-      // std::cout << "Found accepted Compton scatter angles file: " << dataFile << "\n"
-      //  << std::endl;
-      io::CSVReader<5> in(dataFile);
-      in.read_header(io::ignore_extra_column, "angular_bin", "compton_limit_ftb", "compton_limit_btf", "angle_diff_ftb", "angle_diff_btf");
-      float angular_bin;
-      float compton_limit_ftb;
-      float compton_limit_btf;
-      float angle_diff_ftb;
-      float angle_diff_btf;
-      while (in.read_row(angular_bin, compton_limit_ftb, compton_limit_btf, angle_diff_ftb, angle_diff_btf))
-      {
-         fAngularBinVec.push_back(angular_bin);
-         fComptonLimits0.push_back(compton_limit_ftb);
-         fComptonLimits1.push_back(compton_limit_btf);
-      }
-      compton_limit_file.close();
-      // remove first bin of filled vectors sinces it's the zero angle
-      fAngularBinVec.erase(fAngularBinVec.begin());
-      fComptonLimits0.erase(fComptonLimits0.begin());
-      fComptonLimits1.erase(fComptonLimits1.begin());
-   }
-
-} // end ReadInComptonLimits
-
-/****************************************************************
- * Builds allowed Compton bands
- *
- ***************************************************************/
-std::vector<comptonData> BuildComptonBands(double energy_max)
-{
-
-   std::vector<int> x;
-   std::vector<comptonData> result(static_cast<int>(fAngularBinVec.size()));
-   std::vector<double> evaluated_function0(static_cast<int>(energy_max));
-   std::vector<double> evaluated_function1(static_cast<int>(energy_max));
-   std::vector<double> evaluated_function2(static_cast<int>(energy_max));
-   std::vector<double> evaluated_function3(static_cast<int>(energy_max));
-
-   double electron_rest_mass_energy = 511.; // keV
-
-   // Compton-Scatter functions
-   TF1 *f0 = new TF1("f0", "x / (1 + (x / [0]) * (1 - TMath::Cos([1])))", 0, energy_max);
-   TF1 *f1 = new TF1("f1", "x / (1 + (x / [0]) * (1 - TMath::Cos([1])))", 0, energy_max);
-   TF1 *f2 = new TF1("f2", "x - x / (1 + (x / [0]) * (1 - TMath::Cos([1])))", 0, energy_max);
-   TF1 *f3 = new TF1("f3", "x - x / (1 + (x / [0]) * (1 - TMath::Cos([1])))", 0, energy_max);
-
-   // first build evaluation points
-   for (int eval_point = 0; eval_point < energy_max; ++eval_point)
-   {
-      x.push_back(eval_point);
-   }
-
-   // now build the vector we care about
-   f0->SetParameter(0, electron_rest_mass_energy);
-   f1->SetParameter(0, electron_rest_mass_energy);
-   f2->SetParameter(0, electron_rest_mass_energy);
-   f3->SetParameter(0, electron_rest_mass_energy);
-
-   for (int index = 0; index < static_cast<int>(fAngularBinVec.size()); ++index)
-   {
-      f0->SetParameter(1, fComptonLimits0.at(index));
-      f1->SetParameter(1, fComptonLimits1.at(index));
-      f2->SetParameter(1, fComptonLimits0.at(index));
-      f3->SetParameter(1, fComptonLimits1.at(index));
-
-      for (const int &i : x)
-      {
-         double val0 = f0->Eval(i);
-         double val1 = f1->Eval(i);
-         double val2 = f2->Eval(i);
-         double val3 = f3->Eval(i);
-
-         // if (index == 2 && i == 1500)
-         // {
-         //    std::cout << "---> Test" << std::endl;
-         //    std::cout << i << std::endl;
-         //    std::cout << fComptonLimits0.at(2) << ", " << f0->Eval(i) << std::endl;
-         //    std::cout << fComptonLimits1.at(2) << ", " << f1->Eval(i) << std::endl;
-         //    std::cout << f2->Eval(i) << std::endl;
-         //    std::cout << f3->Eval(i) << std::endl;
-         //    std::cout << std::endl;
-         // }
-
-         evaluated_function0.at(i) = val0;
-         evaluated_function1.at(i) = val1;
-         evaluated_function2.at(i) = val2;
-         evaluated_function3.at(i) = val3;
-      }
-
-      result.at(index).angle = fAngularBinVec.at(index);
-      result.at(index).angleIndex = index;
-      result.at(index).energy = x;
-      result.at(index).comptonLimit0 = evaluated_function1;
-      result.at(index).comptonLimit1 = evaluated_function0;
-      result.at(index).comptonLimit2 = evaluated_function2;
-      result.at(index).comptonLimit3 = evaluated_function3;
-   }
-
-   delete f0;
-   delete f1;
-   delete f2;
-   delete f3;
-
-   return result;
-
-} // end BuildComptonBands

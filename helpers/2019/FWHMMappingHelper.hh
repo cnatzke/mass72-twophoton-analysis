@@ -1,5 +1,5 @@
-#ifndef TimingGateOptimizationHelper_h
-#define TimingGateOptimizationHelper_h
+#ifndef FWHMMappingHelper_h
+#define FWHMMappingHelper_h
 
 // Header file for the classes stored in the TTree if any.
 #include "TGriffin.h"
@@ -40,8 +40,8 @@ std::vector<float> fAngularBinVec;
 std::vector<float> fComptonLimits0;
 std::vector<float> fComptonLimits1;
 
-class TimingGateOptimizationHelper : public TGRSIHelper,
-                                     public ROOT::Detail::RDF::RActionImpl<TimingGateOptimizationHelper>
+class FWHMMappingHelper : public TGRSIHelper,
+                          public ROOT::Detail::RDF::RActionImpl<FWHMMappingHelper>
 {
 private:
    std::vector<std::pair<double, int>> fAngleCombinations;
@@ -60,7 +60,7 @@ private:
    bool HasDuplicate(const std::vector<int> &vec);
 
 public:
-   TimingGateOptimizationHelper(TList *list) : TGRSIHelper(list)
+   FWHMMappingHelper(TList *list) : TGRSIHelper(list)
    {
       Prefix("run");
       // calculate angle combinations
@@ -93,7 +93,7 @@ public:
 #endif
 
 // These are needed functions used by TDataFrameLibrary to create and destroy the instance of this TimingInvestigationHelper
-extern "C" TimingGateOptimizationHelper *CreateHelper(TList *list) { return new TimingGateOptimizationHelper(list); }
+extern "C" FWHMMappingHelper *CreateHelper(TList *list) { return new FWHMMappingHelper(list); }
 
 extern "C" void DestroyHelper(TGRSIHelper *helper) { delete helper; }
 

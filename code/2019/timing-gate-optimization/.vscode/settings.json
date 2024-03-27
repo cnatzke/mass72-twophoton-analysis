@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "GammaGammaCoincidenceSlices.C": "cpp",
+        "BetaGammaCoincidenceCounts.C": "cpp",
+        "BetaGammaCoincidenceCounts copy.C": "cpp",
+        "TripleGammaCoincidenceCounts.C": "cpp"
+    }
+}

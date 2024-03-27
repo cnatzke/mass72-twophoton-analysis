@@ -1,10 +1,10 @@
-#include "TimingGateOptimizationHelper.hh"
+#include "FWHMMappingHelper.hh"
 #include <stdlib.h> // rand() function
 #include <unordered_set>
 
 Double_t betaGammaTimingOffset = 277.01;
 
-Int_t twoPhotonCoincidenceTime = 90.;      // ns, max time diff for two-photon events
+double twoPhotonCoinicidenceTime = 90.;    // ns, max time diff for two-photon events
 double delayedBetaTagWidowStartTime = 90.; // ns
 double delayedBetaTagWidowWidth = 820.;    // ns
 double delayedBetaTagWidowEndTime = delayedBetaTagWidowStartTime + delayedBetaTagWidowWidth;
@@ -17,7 +17,7 @@ double zdsMinimumEnergy = 10;    // keV
 double gammaMinimumEnergy = 10;  // keV
 double minimumScatterAngle = 25; // deg
 
-int count = 0;
+std::vector<Int_t> gammaGammaCoincidenceLimits = {60};
 
 bool CoincidentInTimeAbs(Double_t time1, Double_t time2, Double_t time_max)
 {
@@ -33,54 +33,33 @@ bool DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two)
    // TGRSIOptions::AnalysisOptions()->AddbackWindow())); // change this to 300 (ns) if it complains
 }
 
-void TimingGateOptimizationHelper::CreateHistograms(unsigned int slot)
+void FWHMMappingHelper::CreateHistograms(unsigned int slot)
 {
    //* ------- Energy -------
    fH2[slot]["gammaEnergyChannel"] = new TH2D("gammaEnergyChannel", "HPGe crystal number vs #gamma energy", 65, 0., 65., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gammaEnergyChannelBetaTagged"] = new TH2D("gammaEnergyChannelBetaTagged", "HPGe crystal number vs #gamma energy (#beta-tagged)", 65, 0., 65., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gammaSumEnergy"] = new TH2D("gammaSumEnergy", "#gamma sum energy vs single #gamma energy;Sum Energy [keV];Single #gamma Energy [keV]", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Timing -------
    fH1[slot]["gammaSumCoincidenceTiming"] = new TH1D("gammaSumCoincidenceTiming", "Diagnostic timing, Two-Photon Coincidence", 300, -150, 150);
-   fH1[slot]["zdsZdsTiming"] = new TH1D("zdsZdsTiming", "Diagnostic timing, ZDS - ZDS", 3000, 0, 3000);
-   fH2[slot]["gammaSumBetaTiming"] = new TH2D("gammaSumBetaTiming", "#Deltat #gamma#gamma-#beta", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gammaGammaGammaTiming"] = new TH2D("gammaGammaGammaTiming", "#Deltat #gamma#gamma-#gamma", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["relativeCrystalTiming"] = new TH2D("relativeCrystalTiming", "#Deltat #gamma#gamma w.r.t crystal 1;Array Number;#Delta_t [ns]", 66, 0, 66, 4000, -2000, 2000);
-   fH2[slot]["crystalTimingMatrix"] = new TH2D("crystalTimingMatrix", "#Deltat #gamma#gamma;Array Number;#Delta_t [ns]", 66, 0, 66, 4000, -2000, 2000);
-
-   fH2[slot]["delayedGammaGammaTimingMatrix"] = new TH2D("delayedGammaGammaTimingMatrix", "#gamma#gamma timing coincidence (delayed);time[ns]", 1000, -500, 500, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
    fH2[slot]["gammaGammaTimingMatrix"] = new TH2D("gammaGammaTimingMatrix", "#gamma#gamma timing coincidence;time[ns]", 1000, -500, 500, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["delayedGammaGammaBetaDiagnostic1"] = new TH2D("delayedGammaGammaBetaDiagnostic1", "#Deltat #gamma#gamma-#beta", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["delayedGammaGammaBetaDiagnostic2"] = new TH2D("delayedGammaGammaBetaDiagnostic2", "#Deltat #gamma#gamma-#beta", 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-
-   fH1[slot][Form("gammaSumBetaTimingDiagnostic%ins", twoPhotonCoincidenceTime)] = new TH1D(Form("gammaSumBetaTimingDiagnostic%ins", twoPhotonCoincidenceTime), Form("#gamma#gamma-#beta timing diagnostic, |#Deltat_{#gamma#gamma}| < %i ns", twoPhotonCoincidenceTime), 320, -160, 160);
-   fH2[slot][Form("gammaSumBetaTiming%ins", twoPhotonCoincidenceTime)] = new TH2D(Form("gammaSumBetaTiming%ins", twoPhotonCoincidenceTime), Form("#Deltat #gamma#gamma-#beta, |#Deltat_{#gamma#gamma}| < %i ns", twoPhotonCoincidenceTime), 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot][Form("gammaSumGammaTiming%ins", twoPhotonCoincidenceTime)] = new TH2D(Form("gammaSumGammaTiming%ins", twoPhotonCoincidenceTime), Form("#Deltat #gamma#gamma-#gamma, |#Deltat_{#gamma#gamma}| < %i ns", twoPhotonCoincidenceTime), 4000, -2000, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Angles -------
    fH1[slot]["angleRestrictionDiagnostic"] = new TH1D("angleRestrictionDiagnostic", "Angle between two #gamma, restricted", 180, 0, 180);
-   fH2[slot]["gammaSumAngularMatrixBetaTagged"] = new TH2D("gammaSumAngularMatrixBetaTagged", Form("Angle between #gamma#gamma (#beta-tagged), |#Deltat_{#gamma#gamma}| < %i ns", twoPhotonCoincidenceTime), 180, 0, 180, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["sumCorrectionsMatrix"] = new TH2D("sumCorrectionsMatrix", "gamma-#gamma matrix, 180deg only", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Multiplicity -------
-   fH1[slot]["zdsMultiplicity"] = new TH1D("zdsMultiplicity", "ZDS Multiplicity", 5, 0, 5);
-   fH1[slot]["zdsMultiplicityDiagnostic"] = new TH1D("zdsMultiplicityDiagnostic", "ZDS Multiplicity (Diagnostic)", 5, 0, 5);
-   fH1[slot]["gammaGammaGammaCaseID"] = new TH1D("gammaGammaGammaCaseID", "#gamma#gamma#gamma case ID", 5, 0, 5);
-
-   //* ------- Hit Pattern -------
-   fH2[slot]["gammaGammaGammaHitPattern"] = new TH2D("gammaGammaGammaHitPattern", "Hit pattern of #gamma#gamma#gamma events", 65, 0., 65., 65, 0., 65);
-   fH2[slot]["gammaGammaGammaHitPatternDuplicate"] = new TH2D("gammaGammaGammaHitPatternDuplicate", "Hit pattern of #gamma#gamma#gamma events", 65, 0., 65., 65, 0., 65);
+   fH1[slot]["sumEnergyMultiplicityDiagnostic"] = new TH1D("sumEnergyMultiplicityDiagnostic", "GRIFFIN event multiplicity", 5, 0, 5);
 }
 
-void TimingGateOptimizationHelper::Exec(unsigned int slot, TGriffin &grif, TGriffinBgo &grifBgo, TZeroDegree &zds)
+void FWHMMappingHelper::Exec(unsigned int slot, TGriffin &grif, TGriffinBgo &grifBgo, TZeroDegree &zds)
 {
 
    //*--------------------------------------------------
    //* Filling Histograms
    //*--------------------------------------------------
    // * First gamma
+   Int_t grifMultiplicity = grif.GetSuppressedMultiplicity(&grifBgo);
    for (auto g1 = 0; g1 < grif.GetSuppressedMultiplicity(&grifBgo); ++g1)
    {
-      bool singleZDSHit = false;
       auto grif1 = grif.GetSuppressedHit(g1);
 
       double calibratedEnergyGrif1 = ApplySplitCalibration(grif1);
@@ -92,57 +71,6 @@ void TimingGateOptimizationHelper::Exec(unsigned int slot, TGriffin &grif, TGrif
       }
 
       fH2[slot].at("gammaEnergyChannel")->Fill(grif1->GetArrayNumber(), calibratedEnergyGrif1);
-
-      Int_t zdsMultiplicity = zds.GetMultiplicity();
-      fH1[slot].at("zdsMultiplicity")->Fill(zdsMultiplicity);
-
-      bool betaTag = false;
-      for (int z1 = 0; z1 < zds.GetMultiplicity(); ++z1)
-      {
-         auto zds1 = zds.GetZeroDegreeHit(z1);
-
-         if (zds1->GetKValue() != zdsDefaultKValue)
-         {
-            continue;
-         }
-         // sets energy floor at minimum value;
-         if (zds1->GetEnergy() < zdsMinimumEnergy)
-         {
-            continue;
-         }
-
-         betaTag = true;
-
-         if (zdsMultiplicity == 1)
-         {
-            singleZDSHit = true;
-         }
-
-         if (zdsMultiplicity > 1)
-         {
-            for (int z2 = z1 + 1; z2 < zds.GetMultiplicity(); ++z2)
-            {
-               auto zds2 = zds.GetZeroDegreeHit(z2);
-
-               if (zds2->GetKValue() != zdsDefaultKValue)
-               {
-                  continue;
-               }
-               // sets energy floor at minimum value;
-               if (zds2->GetEnergy() < zdsMinimumEnergy)
-               {
-                  continue;
-               }
-
-               Double_t zdsZdsTimeDiff = zds2->GetTime() - zds1->GetTime();
-               fH1[slot].at("zdsZdsTiming")->Fill(zdsZdsTimeDiff);
-            } // end second zds hit
-         }    // end ZDS multiplicity filter
-      }       // end beta tag
-      if (betaTag)
-      {
-         fH2[slot].at("gammaEnergyChannelBetaTagged")->Fill(grif1->GetArrayNumber(), calibratedEnergyGrif1);
-      }
 
       // *============ SECOND GAMMA ============ //
       for (auto g2 = g1 + 1; g2 < grif.GetSuppressedMultiplicity(&grifBgo); ++g2)
@@ -162,303 +90,25 @@ void TimingGateOptimizationHelper::Exec(unsigned int slot, TGriffin &grif, TGrif
          auto angleIndex = fAngleMap.lower_bound(angle - 0.0005);
          double gammaGammaTimeDiff = grif2->GetTime() - grif1->GetTime();
 
-         if (angle > 170.)
-         {
-            fH2[slot].at("sumCorrectionsMatrix")->Fill(calibratedEnergyGrif1, calibratedEnergyGrif2);
-            fH2[slot].at("sumCorrectionsMatrix")->Fill(calibratedEnergyGrif2, calibratedEnergyGrif1);
-         }
-
          // * ------- TWO-PHOTON COINCIDENCE -------
          auto sumEnergy = calibratedEnergyGrif1 + calibratedEnergyGrif2;
 
-         // Timing optimization -- two photon coincidence window
-         // beta tag
-         if (singleZDSHit)
+         // exclude smallest scatter angle
+         if (angle > minimumScatterAngle)
          {
-            for (auto z = 0; z < zds.GetMultiplicity(); ++z)
+            if (grifMultiplicity == 2)
             {
-               auto zds1 = zds.GetHit(z);
-
-               // select good zds hits
-               if (zds1->GetKValue() != zdsDefaultKValue)
-               {
-                  continue;
-               }
-               // sets energy floor at minimum value;
-               if (zds1->GetEnergy() < zdsMinimumEnergy)
-               {
-                  continue;
-               }
-
-               fH1[slot].at("zdsMultiplicityDiagnostic")->Fill(zds.GetMultiplicity());
-
-               Double_t grif1BetaTimeDiff = zds1->GetTime() - grif1->GetTime();
-               Double_t grif2BetaTimeDiff = zds1->GetTime() - grif2->GetTime();
-
-               // align prompt peak to bin 0
-               grif1BetaTimeDiff = grif1BetaTimeDiff - betaGammaTimingOffset;
-               grif2BetaTimeDiff = grif2BetaTimeDiff - betaGammaTimingOffset;
-
-               // only look at delayed coincidences
-               bool delayed1 = false;
-               bool delayed2 = false;
-               if (grif1BetaTimeDiff > delayedBetaTagWidowStartTime && grif1BetaTimeDiff < delayedBetaTagWidowEndTime)
-               {
-                  delayed1 = true;
-               }
-               if (grif2BetaTimeDiff > delayedBetaTagWidowStartTime && grif2BetaTimeDiff < delayedBetaTagWidowEndTime)
-               {
-                  delayed2 = true;
-               }
-
-               // exclude smallest scatter angle
-               if (angle > minimumScatterAngle)
-               {
-                  fH1[slot].at("angleRestrictionDiagnostic")->Fill(angle);
-                  fH2[slot].at("gammaGammaTimingMatrix")->Fill(gammaGammaTimeDiff, sumEnergy);
-                  if (delayed1 && delayed2)
-                  {
-                     fH2[slot].at("delayedGammaGammaTimingMatrix")->Fill(gammaGammaTimeDiff, sumEnergy);
-                     // --- diagnostic timing
-                     fH2[slot].at("delayedGammaGammaBetaDiagnostic1")->Fill(grif1BetaTimeDiff, sumEnergy);
-                     fH2[slot].at("delayedGammaGammaBetaDiagnostic2")->Fill(grif2BetaTimeDiff, sumEnergy);
-                  }
-               } // end angle restriction
-            }    // end beta tag
-         }       // end ZDS multiplicity restriction
-
-         // Timing optimization
-         if (TMath::Abs(gammaGammaTimeDiff) < twoPhotonCoincidenceTime)
-         {
-            fH1[slot].at(Form("gammaSumBetaTimingDiagnostic%ins", twoPhotonCoincidenceTime))->Fill(gammaGammaTimeDiff);
-
-            // beta tag
-            for (auto z = 0; z < zds.GetMultiplicity(); ++z)
-            {
-               auto zds1 = zds.GetHit(z);
-
-               // select good zds hits
-               if (zds1->GetKValue() != zdsDefaultKValue)
-               {
-                  continue;
-               }
-               // sets energy floor at minimum value;
-               if (zds1->GetEnergy() < zdsMinimumEnergy)
-               {
-                  continue;
-               }
-
-               Double_t grif1BetaTimeDiff = zds1->GetTime() - grif1->GetTime();
-               Double_t grif2BetaTimeDiff = zds1->GetTime() - grif2->GetTime();
-
-               // align prompt peak to bin 0
-               grif1BetaTimeDiff = grif1BetaTimeDiff - betaGammaTimingOffset;
-               grif2BetaTimeDiff = grif2BetaTimeDiff - betaGammaTimingOffset;
-
-               // exclude smallest scatter angle
-               if (angle > minimumScatterAngle)
-               {
-                  if (singleZDSHit)
-                  {
-                     // time difference
-                     fH2[slot].at(Form("gammaSumBetaTiming%ins", twoPhotonCoincidenceTime))->Fill(grif1BetaTimeDiff, sumEnergy);
-                     fH2[slot].at(Form("gammaSumBetaTiming%ins", twoPhotonCoincidenceTime))->Fill(grif2BetaTimeDiff, sumEnergy);
-                  } // end ZDS multiplicity restriction
-               }    // end angle restriction
-            }       // end beta tag
-         }          // end coincidence loop
+               fH1[slot].at("angleRestrictionDiagnostic")->Fill(angle);
+               fH1[slot].at("sumEnergyMultiplicityDiagnostic")->Fill(grifMultiplicity);
+               fH2[slot].at("gammaSumEnergy")->Fill(sumEnergy, calibratedEnergyGrif1);
+            }
+         }
 
       } // end second gamma
    }    // end singles suppressed
-
-   // * 60Co Timing diagnostic
-   bool referenceCrystal = false;
-   bool firstCrystalIsReference = false;
-   for (auto g1 = 0; g1 < grif.GetSuppressedMultiplicity(&grifBgo); ++g1)
-   {
-      auto grif1 = grif.GetSuppressedHit(g1);
-
-      double calibratedEnergyGrif1 = ApplySplitCalibration(grif1);
-
-      // sets energy floor at minimum value;
-      if (calibratedEnergyGrif1 < gammaMinimumEnergy)
-      {
-         continue;
-      }
-
-      // check if we have a hit in crystal 1
-      if (grif1->GetArrayNumber() == 1)
-      {
-         referenceCrystal = true;
-         firstCrystalIsReference = true;
-      }
-
-      for (auto g2 = g1 + 1; g2 < grif.GetSuppressedMultiplicity(&grifBgo); ++g2)
-      {
-         auto grif2 = grif.GetSuppressedHit(g2);
-
-         double calibratedEnergyGrif2 = ApplySplitCalibration(grif2);
-
-         if (calibratedEnergyGrif2 < gammaMinimumEnergy)
-         {
-            continue;
-         }
-
-         if (grif2->GetArrayNumber() == 1)
-         {
-            referenceCrystal = true;
-            firstCrystalIsReference = false;
-         }
-
-         if (referenceCrystal)
-         {
-            Double_t timeDifference = grif2->GetTime() - grif1->GetTime();
-            if (firstCrystalIsReference)
-            {
-               fH2[slot].at("relativeCrystalTiming")->Fill(grif2->GetArrayNumber(), timeDifference);
-            }
-            else
-            {
-               fH2[slot].at("relativeCrystalTiming")->Fill(grif1->GetArrayNumber(), timeDifference);
-            }
-         }
-      }
-   } // end 60Co Timing
-
-   //*--------------------------------------------------
-   //* Gamma-Gamma-Gamma Histograms
-   //*--------------------------------------------------
-   // Addback_t addbackData = GetAddback(grif, grifBgo);
-   // * First gamma
-   for (auto g1 = 0; g1 < grif.GetSuppressedMultiplicity(&grifBgo); ++g1)
-   {
-      auto grif1 = grif.GetSuppressedHit(g1);
-
-      double calibratedEnergyGrif1 = ApplySplitCalibration(grif1);
-
-      // sets energy floor at minimum value;
-      if (calibratedEnergyGrif1 < gammaMinimumEnergy)
-      {
-         continue;
-      }
-      // * Second gamma
-      for (auto g2 = g1 + 1; g2 < grif.GetSuppressedMultiplicity(&grifBgo); ++g2)
-      {
-         if (g1 >= g2)
-         {
-            continue;
-         }
-
-         auto grif2 = grif.GetSuppressedHit(g2);
-
-         double calibratedEnergyGrif2 = ApplySplitCalibration(grif2);
-         // sets energy floor at minimum value;
-         if (calibratedEnergyGrif2 < gammaMinimumEnergy)
-         {
-            continue;
-         }
-         // * Third gamma
-         for (auto g3 = g2 + 1; g3 < grif.GetSuppressedMultiplicity(&grifBgo); ++g3)
-         {
-
-            auto grif3 = grif.GetSuppressedHit(g3);
-
-            double calibratedEnergyGrif3 = ApplySplitCalibration(grif3);
-
-            // sets energy floor at minimum value;
-            if (calibratedEnergyGrif3 < gammaMinimumEnergy)
-            {
-               continue;
-            }
-
-            std::vector<Int_t> cloverIDs;
-            cloverIDs.push_back(grif1->GetDetector());
-            cloverIDs.push_back(grif2->GetDetector());
-            cloverIDs.push_back(grif3->GetDetector());
-            // events must be in different clovers
-            if (HasDuplicate(cloverIDs))
-            {
-               fH2[slot].at("gammaGammaGammaHitPatternDuplicate")->Fill(grif1->GetArrayNumber(), grif2->GetArrayNumber());
-               fH2[slot].at("gammaGammaGammaHitPatternDuplicate")->Fill(grif1->GetArrayNumber(), grif3->GetArrayNumber());
-               fH2[slot].at("gammaGammaGammaHitPatternDuplicate")->Fill(grif2->GetArrayNumber(), grif3->GetArrayNumber());
-               cloverIDs.clear();
-               continue;
-            }
-
-            Int_t caseID = 0;
-            Double_t sumEnergy;
-            Double_t timeDiff;
-            if (CoincidentInTimeAbs(grif1->GetTime(), grif2->GetTime(), twoPhotonCoincidenceTime))
-            {
-               sumEnergy = calibratedEnergyGrif1 + calibratedEnergyGrif2;
-               timeDiff = grif1->GetTime() - grif3->GetTime();
-               caseID = 1;
-            }
-            else if (CoincidentInTimeAbs(grif1->GetTime(), grif3->GetTime(), twoPhotonCoincidenceTime))
-            {
-               sumEnergy = calibratedEnergyGrif1 + calibratedEnergyGrif3;
-               timeDiff = grif1->GetTime() - grif2->GetTime();
-               caseID = 2;
-            }
-            else if (CoincidentInTimeAbs(grif2->GetTime(), grif3->GetTime(), twoPhotonCoincidenceTime))
-            {
-               sumEnergy = calibratedEnergyGrif2 + calibratedEnergyGrif3;
-               timeDiff = grif2->GetTime() - grif1->GetTime();
-               caseID = 3;
-            }
-            fH1[slot].at("gammaGammaGammaCaseID")->Fill(caseID);
-            fH2[slot].at("gammaGammaGammaTiming")->Fill(timeDiff, sumEnergy);
-            fH2[slot].at("gammaGammaGammaHitPattern")->Fill(grif1->GetArrayNumber(), grif2->GetArrayNumber());
-            fH2[slot].at("gammaGammaGammaHitPattern")->Fill(grif1->GetArrayNumber(), grif3->GetArrayNumber());
-            fH2[slot].at("gammaGammaGammaHitPattern")->Fill(grif2->GetArrayNumber(), grif3->GetArrayNumber());
-
-            cloverIDs.clear();
-         } // end third gamma
-      }    // end second gamma
-   }       // end first gamma
 }
 
-bool TimingGateOptimizationHelper::GetComptonTag(double energy1, double energy2, int angle_index)
-{
-   std::vector<double> comptonLimits(4);
-   bool possible_compton = false;
-   GetComptonLimits(energy1 + energy2, angle_index, comptonLimits);
-
-   if (!possible_compton && comptonLimits.at(0) <= energy1 && energy1 <= comptonLimits.at(1))
-   {
-      possible_compton = true;
-   }
-   else if (!possible_compton && comptonLimits.at(3) <= energy1 && energy1 <= comptonLimits.at(2))
-   {
-      possible_compton = true;
-   }
-   else if (!possible_compton && comptonLimits.at(0) <= energy2 && energy2 <= comptonLimits.at(1))
-   {
-      possible_compton = true;
-   }
-   else if (!possible_compton && comptonLimits.at(3) <= energy2 && energy2 <= comptonLimits.at(2))
-   {
-      possible_compton = true;
-   }
-
-   return possible_compton;
-
-} // end GetComptonTag
-
-void TimingGateOptimizationHelper::GetComptonLimits(double energy, int index, std::vector<double> &vec)
-{
-   // first get angular index
-   struct comptonData indexData = fComptonMapping.at(index);
-
-   // then get energy and bands
-   int energy_index = round(energy);
-   vec.at(0) = indexData.comptonLimit0.at(energy_index);
-   vec.at(1) = indexData.comptonLimit1.at(energy_index);
-   vec.at(2) = indexData.comptonLimit2.at(energy_index);
-   vec.at(3) = indexData.comptonLimit3.at(energy_index);
-}
-
-double TimingGateOptimizationHelper::ApplySplitCalibration(TGriffinHit *grifHit)
+double FWHMMappingHelper::ApplySplitCalibration(TGriffinHit *grifHit)
 {
    double charge = grifHit->GetCharge();
    int detector = grifHit->GetArrayNumber();
@@ -511,7 +161,7 @@ double TimingGateOptimizationHelper::ApplySplitCalibration(TGriffinHit *grifHit)
 
 } // end ApplySplitCalibration
 
-Addback_t TimingGateOptimizationHelper::GetAddback(TGriffin &grif, TGriffinBgo &grifBgo)
+Addback_t FWHMMappingHelper::GetAddback(TGriffin &grif, TGriffinBgo &grifBgo)
 {
 
    Addback_t addbackData;
@@ -583,7 +233,7 @@ Addback_t TimingGateOptimizationHelper::GetAddback(TGriffin &grif, TGriffinBgo &
    return addbackData;
 } // end GetAddback
 
-bool TimingGateOptimizationHelper::HasDuplicate(const std::vector<int> &vec)
+bool FWHMMappingHelper::HasDuplicate(const std::vector<int> &vec)
 {
    std::unordered_set<int> uniqueElements;
 

@@ -1,5 +1,5 @@
-#ifndef TimingGateOptimizationHelper_h
-#define TimingGateOptimizationHelper_h
+#ifndef LimitCalculationHelper_h
+#define LimitCalculationHelper_h
 
 // Header file for the classes stored in the TTree if any.
 #include "TGriffin.h"
@@ -30,7 +30,7 @@ struct Addback_t
 };
 
 // function to calculate angles (from LeanCorrelations), implemented at the end of this file
-std::vector<std::pair<double, int>> AngleCombinations(double distance = 145., bool folding = false,
+std::vector<std::pair<double, int>> AngleCombinations(double distance = 110., bool folding = false,
                                                       bool addback = false);
 // Compton rejection stuff
 void ReadInComptonLimitsFile(std::string dataFile);
@@ -40,8 +40,8 @@ std::vector<float> fAngularBinVec;
 std::vector<float> fComptonLimits0;
 std::vector<float> fComptonLimits1;
 
-class TimingGateOptimizationHelper : public TGRSIHelper,
-                                     public ROOT::Detail::RDF::RActionImpl<TimingGateOptimizationHelper>
+class LimitCalculationHelper : public TGRSIHelper,
+                               public ROOT::Detail::RDF::RActionImpl<LimitCalculationHelper>
 {
 private:
    std::vector<std::pair<double, int>> fAngleCombinations;
@@ -60,7 +60,7 @@ private:
    bool HasDuplicate(const std::vector<int> &vec);
 
 public:
-   TimingGateOptimizationHelper(TList *list) : TGRSIHelper(list)
+   LimitCalculationHelper(TList *list) : TGRSIHelper(list)
    {
       Prefix("run");
       // calculate angle combinations
@@ -93,7 +93,7 @@ public:
 #endif
 
 // These are needed functions used by TDataFrameLibrary to create and destroy the instance of this TimingInvestigationHelper
-extern "C" TimingGateOptimizationHelper *CreateHelper(TList *list) { return new TimingGateOptimizationHelper(list); }
+extern "C" LimitCalculationHelper *CreateHelper(TList *list) { return new LimitCalculationHelper(list); }
 
 extern "C" void DestroyHelper(TGRSIHelper *helper) { delete helper; }
 
