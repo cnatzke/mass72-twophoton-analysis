@@ -10,7 +10,7 @@ Int_t delayedBetaTagWindowEnd = delayedBetaTagWindowStart + delayedBetaTagWindow
 Double_t betaGammaTimingOffset = 277.01;
 
 double gammaEnergyMin = 0.;
-double gammaEnergyMax = 3000.;
+double gammaEnergyMax = 5500.;
 
 double zdsDefaultKValue = 60;
 double zdsMinimumEnergy = 10;    // keV
@@ -18,15 +18,21 @@ double gammaMinimumEnergy = 0;   // keV
 double minimumScatterAngle = 25; // deg
 
 // -- Carlotta stuff
-double gbin = 5500.;
-double gx = 0.;
-double gy = 5500.;
 double ggHigh = 100.;
 double bgLow = 500.;
 double bgHigh = 2000.;
 
+double gBinSize = 1;
+double gx = 0.;
+double gy = 5500.;
+double gBins = (gy - gx) / gBinSize;
+
 // -- only use low energy calibration
 bool useLowEnergyCalibrationOnly = true;
+
+// -- for printing
+Int_t count = 0;
+Int_t countMax = 10;
 
 bool CoincidentInTimeAbs(Double_t time1, Double_t time2, Int_t time_max)
 {
@@ -35,7 +41,7 @@ bool CoincidentInTimeAbs(Double_t time1, Double_t time2, Int_t time_max)
 
 // =========== ADDBACK BUILDING taken from GRSISort/libraries/TGRSIAnalysis/TGrfiffin/TGriffin.cxx ============ //
 // bool DefaultGriffinAddback(const TGRSIDetectorHit& one, const TGRSIDetectorHit& two)
-bool DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two)
+bool SummingCorrectionHelper::DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two)
 {
    return ((one->GetDetector() == two->GetDetector()) &&
            (std::fabs(one->GetTime() - two->GetTime()) < 300.));
@@ -48,16 +54,18 @@ void SummingCorrectionHelper::CreateHistograms(unsigned int slot)
    fH2[slot]["hpgeChargeChannel"] = new TH2D("hpgeChargeChannel", "HPGe crystal number vs collected charge", 66, 0., 66., 8000., 0., 8000.);
 
    //* ------- Energy -------
-   fH2[slot]["gammaEnergyChannelUnsuppressed"] = new TH2D("gammaEnergyChannelUnsuppressed", "HPGe crystal number vs #gamma energy (Unsuppressed)", 66, 0., 66., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gammaEnergyChannel"] = new TH2D("gammaEnergyChannel", "HPGe crystal number vs #gamma energy", 65, 0., 65., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gammaEnergyChannelUnsuppressed"] = new TH2D("gammaEnergyChannelUnsuppressed", "HPGe crystal number vs #gamma energy (Unsuppressed)", 66, 0., 66., gBins, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gammaEnergyChannel"] = new TH2D("gammaEnergyChannel", "HPGe crystal number vs #gamma energy", 65, 0., 65., gBins, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["gEnergyAddback"] = new TH2D("gEnergyAddback", "HPGe clover number vs #gamma energy", 18, 0., 18., gBins, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Timing -------
    fH1[slot]["sumCorrectionsTimingDiagnostic"] = new TH1D("sumCorrectionsTimingDiagnostic", "Diagnostic timing, Sum Corrections Coincidence;|#Delta t|", 250, 0., 250.);
 
    //* ------- Angles -------
-   fH2[slot]["sumCorrectionsMatrixUnsuppressed"] = new TH2D("sumCorrectionsMatrixUnsuppressed", "gamma-#gamma matrix, 180deg only, Unsuppressed", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   // fH2[slot]["sumCorrectionsMatrix"] = new TH2D("sumCorrectionsMatrix", "gamma-#gamma matrix, 180deg only", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["sumCorrectionsMatrix"] = new TH2D("sumCorrectionsMatrix", "180^{o}: #gamma-#gamma, time random background subtracted", gbin, gx, gy, gbin, gx, gy);
+   fH2[slot]["sumCorrectionsMatrixUnsuppressed"] = new TH2D("sumCorrectionsMatrixUnsuppressed", "gamma-#gamma matrix, 180deg only, Unsuppressed", gBins, gammaEnergyMin, gammaEnergyMax, gBins, gammaEnergyMin, gammaEnergyMax);
+   // fH2[slot]["sumCorrectionsMatrix"] = new TH2D("sumCorrectionsMatrix", "gamma-#gamma matrix, 180deg only", gBins, gammaEnergyMin, gammaEnergyMax, gBins, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["sumCorrectionsMatrix"] = new TH2D("sumCorrectionsMatrix", "180^{o}: #gamma-#gamma, time random background subtracted", gBins, gx, gy, gBins, gx, gy);
+   fH2[slot]["sumCorrectionsMatrixAddback"] = new TH2D("sumCorrectionsMatrixAddback", "180^{o}: #gamma-#gamma, time random background subtracted, Addback", gBins, gx, gy, gBins, gx, gy);
 
    //* ------- Multiplicity -------
 
@@ -171,46 +179,34 @@ void SummingCorrectionHelper::Exec(unsigned int slot, TGriffin &grif, TGriffinBg
          } // -- end 180 deg angle restriction
       }    // end second gamma
    }       // end singles suppressed
-}
 
-bool SummingCorrectionHelper::GetComptonTag(double energy1, double energy2, int angle_index)
-{
-   std::vector<double> comptonLimits(4);
-   bool possible_compton = false;
-   GetComptonLimits(energy1 + energy2, angle_index, comptonLimits);
+   // --- Build addback hits
+   Addback_t addbackHits = GetAddback(grif, grifBgo);
 
-   if (!possible_compton && comptonLimits.at(0) <= energy1 && energy1 <= comptonLimits.at(1))
+   for (auto a1 = 0; a1 < addbackHits.energyCTCorrected.size(); ++a1)
    {
-      possible_compton = true;
-   }
-   else if (!possible_compton && comptonLimits.at(3) <= energy1 && energy1 <= comptonLimits.at(2))
-   {
-      possible_compton = true;
-   }
-   else if (!possible_compton && comptonLimits.at(0) <= energy2 && energy2 <= comptonLimits.at(1))
-   {
-      possible_compton = true;
-   }
-   else if (!possible_compton && comptonLimits.at(3) <= energy2 && energy2 <= comptonLimits.at(2))
-   {
-      possible_compton = true;
-   }
+      fH2[slot].at("gEnergyAddback")->Fill(addbackHits.clover.at(a1), addbackHits.energyCTCorrected.at(a1));
+      for (auto a2 = 0; a2 < addbackHits.energyCTCorrected.size(); ++a2)
+      {
+         if (a1 == a2)
+            continue;
+         Double_t ggTime = TMath::Abs(addbackHits.time.at(a1) - addbackHits.time.at(a2));
 
-   return possible_compton;
-
-} // end GetComptonTag
-
-void SummingCorrectionHelper::GetComptonLimits(double energy, int index, std::vector<double> &vec)
-{
-   // first get angular index
-   struct comptonData indexData = fComptonMapping.at(index);
-
-   // then get energy and bands
-   int energy_index = round(energy);
-   vec.at(0) = indexData.comptonLimit0.at(energy_index);
-   vec.at(1) = indexData.comptonLimit1.at(energy_index);
-   vec.at(2) = indexData.comptonLimit2.at(energy_index);
-   vec.at(3) = indexData.comptonLimit3.at(energy_index);
+         if (p180[addbackHits.clover.at(a1) - 1][addbackHits.clover.at(a2) - 1])
+         {
+            if (ggTime < ggHigh)
+            {
+               fH2[slot].at("sumCorrectionsMatrixAddback")->Fill(addbackHits.energyCTCorrected.at(a1), addbackHits.energyCTCorrected.at(a2));
+            }
+            else if (bgLow < ggTime && ggTime < bgHigh)
+            {
+               fH2[slot].at("sumCorrectionsMatrixAddback")->Fill(addbackHits.energyCTCorrected.at(a1), addbackHits.energyCTCorrected.at(a2), -ggHigh / (bgHigh - bgLow));
+            }
+            else
+               continue;
+         } // -- if p180[..
+      }    // -- end second addback hit
+   }       // -- end first addback hit
 }
 
 double SummingCorrectionHelper::ApplySplitCalibration(TGriffinHit *grifHit, bool lowEnergyCalibration)
@@ -295,10 +291,10 @@ Addback_t SummingCorrectionHelper::GetAddback(TGriffin &grif, TGriffinBgo &grifB
    {
       auto grif1 = grif.GetSuppressedHit(g1);
       Int_t det = grif1->GetArrayNumber();
-      double calibratedEnergyGrif1 = ApplySplitCalibration(grif1, useLowEnergyCalibrationOnly);
+      double calibratedEnergy1 = ApplySplitCalibration(grif1, useLowEnergyCalibrationOnly);
 
       // sets energy floor at minimum value;
-      if (calibratedEnergyGrif1 < gammaMinimumEnergy)
+      if (calibratedEnergy1 < gammaMinimumEnergy)
       {
          continue;
       }
@@ -308,28 +304,28 @@ Addback_t SummingCorrectionHelper::GetAddback(TGriffin &grif, TGriffinBgo &grifB
          continue; // skip events which were the second hit in an addback hit
       }
 
-      energy = calibratedEnergyGrif1;
-      energyCT = calibratedEnergyGrif1;
+      energy = calibratedEnergy1;
+      energyCT = calibratedEnergy1;
+
+      addbackData.energyIndividual.push_back(calibratedEnergy1);
 
       for (auto g2 = g1 + 1; g2 < grif.GetSuppressedMultiplicity(&grifBgo); ++g2)
       {
          auto grif2 = grif.GetSuppressedHit(g2);
-         double calibratedEnergyGrif2 = ApplySplitCalibration(grif2, useLowEnergyCalibrationOnly);
+         double calibratedEnergy2 = ApplySplitCalibration(grif2, useLowEnergyCalibrationOnly);
          // sets energy floor at minimum value;
-         if (calibratedEnergyGrif2 < gammaMinimumEnergy)
+         if (calibratedEnergy2 < gammaMinimumEnergy)
          {
             continue;
          }
-
          if (DefaultGriffinAddback(grif1, grif2))
          {
             skip.push_back(g2);
-            if (calibratedEnergyGrif2 > 0)
-            {
-               energy += calibratedEnergyGrif2;
-               energyCT -= CTcoeff[grif1->GetDetector() - 1][grif1->GetCrystal()][grif2->GetCrystal()] * calibratedEnergyGrif2;
-               energyCT += (calibratedEnergyGrif2 - CTcoeff[grif1->GetDetector() - 1][grif2->GetCrystal()][grif1->GetCrystal()] * calibratedEnergyGrif1);
-            }
+            addbackData.energyIndividual.push_back(calibratedEnergy2);
+
+            energy += calibratedEnergy2;
+            energyCT -= CTcoeff[grif1->GetDetector() - 1][grif1->GetCrystal()][grif2->GetCrystal()] * calibratedEnergy2;
+            energyCT += (calibratedEnergy2 - CTcoeff[grif1->GetDetector() - 1][grif2->GetCrystal()][grif1->GetCrystal()] * calibratedEnergy1);
          }
       }
 

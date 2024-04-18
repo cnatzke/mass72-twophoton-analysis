@@ -1,52 +1,52 @@
-#include "TriplePhotonCoincidenceHelper.hh"
+#include "QuadPhotonCoincidenceHelper.hh"
 #include <stdlib.h> // rand() function
 #include <unordered_set>
+
+Double_t betaGammaTimingOffset = 277.01;
 
 // -- time random window
 Int_t timeRandomGateStart = 1000;
 Int_t timeRandomGateEnd = 2000;
 
 double gammaEnergyMin = 0.;
-double gammaEnergyMax = 4100.;
+double gammaEnergyMax = 4000.;
 
 // -- minimum values conditions
-double zdsDefaultKValue = 60;
-double zdsMinimumEnergy = 10;    // keV
 double gammaMinimumEnergy = 10;  // keV
 double minimumScatterAngle = 25; // deg
 
-// -- delayed window
-Int_t twoPhotonCoincidenceTime = 90; // ns, max time diff for two-photon events
-
-// -- time gates (two-photon, 691 keV)
-// Int_t gateGammaDelayWindowStart = 90;  // ns
-// Int_t gateGammaDelayWindowWidth = 970; // ns
-
-// -- time gates (864 keV, prompt, testing)
+// --- energy gates, PoC
+double expectedTwoPhotonEnergy = 1862;
+double gateEnergy1 = 629;
+double gateEnergy2 = 834;
+double nuclearLevelEnergy = 3325;
+double qValue = 3998;
+// --- prompt cascade, proof of concept (PoC)
 Int_t gateGammaDelayWindowStart = 0;   // ns
 Int_t gateGammaDelayWindowWidth = 400; // ns
 
+// -- energy gates, two-photon
+// double expectedTwoPhotonEnergy = 691;
+// double gateEnergy1 = 633;
+// double gateEnergy2 = 1710;
+// double nuclearLevelEnergy = 3036;
+// double qValue = 3998;
+// // --- delayed coincidence timing
+// Int_t gateGammaDelayWindowStart = 90;  // ns
+// Int_t gateGammaDelayWindowWidth = 970; // ns
+
+// -- global options
+double gateEnergyHalfWidth = 3;
+float nuclearLevelEnergyBuffer = 20;
+bool useSecondGate = true;
+bool setTotalEnergyFloor = false;
+
+// -- timings
+Int_t twoPhotonCoincidenceTime = 90; // ns, max time diff for two-photon events
 Int_t gateGammaDelayWindowEnd = gateGammaDelayWindowStart + gateGammaDelayWindowWidth;
 
-// -- energy gates (864 keV, prompt, testing)
-double firstEnergyGate = 1862;
-double secondEnergyGate = 629;
-double energyGateHalfWidth = 3;
-double qValue = 3998;
-double nuclearLevelEnergy = 3325;
-double nuclearLevelEnergyBuffer = 20; // keV
-double totalEnergyReduction = 691;
-
-// --- global options
-bool useSecondEnergyGate = true;
-bool reduceTotalEnergy = true;
-
-// -- energy gates (two-photon, 691 keV)
-// double firstEnergyGate = 633;
-// double energyGateHalfWidth = 3;
-// double qValue = 3998;
-// double nuclearLevelEnergy = 3036;
-// double nuclearLevelEnergyBuffer = 20; // keV
+// --- diagnostic count, for printing
+int count = 0;
 
 bool CoincidentInTimeAbs(Double_t time1, Double_t time2, Double_t time_max)
 {
@@ -62,40 +62,31 @@ bool DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two)
    // TGRSIOptions::AnalysisOptions()->AddbackWindow())); // change this to 300 (ns) if it complains
 }
 
-void TriplePhotonCoincidenceHelper::CreateHistograms(unsigned int slot)
+void QuadPhotonCoincidenceHelper::CreateHistograms(unsigned int slot)
 {
    //* ------- Energy -------
-   fH1[slot]["gEnergyTotal"] = new TH1D("gEnergyTotal", "Total energy sum", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH1[slot]["gEnergyTotal"] = new TH1D("gEnergyTotal", "Total decay energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
    fH2[slot]["gEChannel"] = new TH2D("gEChannel", "HPGe crystal number vs #gamma energy", 65, 0., 65., gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
-   fH1[slot]["gggEnergy"] = new TH1D("gggEnergy", Form("#gamma energy, gated %i, %i, #Deltat_{#gamma-#gamma}#in(%i,%i);Energy [keV]", (int)firstEnergyGate, (int)secondEnergyGate, gateGammaDelayWindowStart, gateGammaDelayWindowEnd), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH1[slot]["ggEnergy"] = new TH1D("ggEnergy", Form("#gamma energy, gated %i, #Deltat_{#gamma-#gamma}#in(%i,%i);Energy [keV]", (int)firstEnergyGate, gateGammaDelayWindowStart, gateGammaDelayWindowEnd), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gggSumEnergy"] = new TH2D("gggSumEnergy", "#gamma-#gamma#gamma sum energy |#Deltat| < 90ns, delayed;#gamma;Sum energy", gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["ggMatrix"] = new TH2D("ggMatrix", Form("#gamma#gamma energy, E_{total}#in(1434,1474), #Deltat_{#gamma-#gamma}#in(%i,%i);Energy [keV]", gateGammaDelayWindowStart, gateGammaDelayWindowEnd), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["ggMatrixStrict"] = new TH2D("ggMatrixStrict", Form("#gamma#gamma energy, E_{total}<800, #Deltat_{#gamma-#gamma}#in(%i,%i);Energy [keV]", gateGammaDelayWindowStart, gateGammaDelayWindowEnd), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-
-   // --- single energy gate
+   fH2[slot]["ggggSumEnergy"] = new TH2D("ggggSumEnergy", Form("#Deltat_{#gamma#gamma} < %i ns, #Deltat_{gate}#in(%i,%i) ns, Gate: %i keV;E_{#gamma+#gamma} [keV];E_{#gamma} [keV]", twoPhotonCoincidenceTime, gateGammaDelayWindowStart, gateGammaDelayWindowEnd, (int)gateEnergy1), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["ggggSumEnergy2Gates"] = new TH2D("ggggSumEnergy2Gates", Form("#Deltat_{#gamma#gamma} < %i ns, #Deltat_{gate}#in(%i,%i) ns, Gate: %i,%i keV;E_{#gamma+#gamma} [keV];E_{#gamma} [keV]", twoPhotonCoincidenceTime, gateGammaDelayWindowStart, gateGammaDelayWindowEnd, (int)gateEnergy1, (int)gateEnergy2), gammaEnergyMax, gammaEnergyMin, gammaEnergyMax, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Timing -------
    fH2[slot]["ggTiming"] = new TH2D("ggTiming", "#Deltat #gamma#gamma", 1200, -100, 1100, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gggTiming"] = new TH2D("gggTiming", "#Deltat #gamma#gamma-#gamma, delayed", 2200, -100, 2100, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["gggTimingWithFloor"] = new TH2D("gggTimingWithFloor", "#Deltat #gamma#gamma-#gamma, delayed", 2200, -100, 2100, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-
-   fH2[slot]["ggMatrixTiming"] = new TH2D("ggMatrixTiming", ";#Deltat_{#gamma#gamma};E_{#gamma + #gamma}", 2200, -100, 2100, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
-   fH2[slot]["ggMatrixTimingStrict"] = new TH2D("ggMatrixTimingStrict", ";#Deltat_{#gamma#gamma};E_{#gamma + #gamma}", 2200, -100, 2100, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
+   fH2[slot]["ggggTiming"] = new TH2D("ggggTiming", "#Deltat #gamma#gamma-#gamma-#gamma", 2500, -500, 2000, gammaEnergyMax, gammaEnergyMin, gammaEnergyMax);
 
    //* ------- Angles -------
+   fH1[slot]["angleDiagnostic"] = new TH1D("angleDiagnostic", "Angle between any two #gamma", 185, 0, 185);
 
    //* ------- Multiplicity -------
 
    //* ------- Hit Pattern -------
-   fH2[slot]["gggHitPattern"] = new TH2D("gggHitPattern", "Hit pattern of #gamma#gamma#gamma events", 65, 0., 65., 65, 0., 65);
+   // fH2[slot]["ggggHitPattern"] = new TH2D("ggggHitPattern", "Hit pattern of #gamma#gamma#gamma#gamma events", 65, 0., 65., 65, 0., 65);
 }
 
-void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGriffinBgo &grifBgo, TZeroDegree &zds)
+void QuadPhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGriffinBgo &grifBgo, TZeroDegree &zds)
 {
 
-   //* --- Gamma-Gamma-Gamma Histograms
    // --- First gamma
    for (auto g1 = 0; g1 < grif.GetSuppressedMultiplicity(&grifBgo); ++g1)
    {
@@ -136,44 +127,7 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
             continue;
          }
 
-         auto g1g2AngleIndex = fAngleMap.lower_bound(g1g2Angle - 0.0005);
-         double g1g2TimeDiff = grif2->GetTime() - grif1->GetTime();
-
-         // * gg matrix check for 143 keV
-         double ggTime = 9999;
-         double ggGateEnergyRelaxed = 1464;
-         double ggGateHalfWidth = 10;
-         double ggGateEnergyStrict = 800;
-         double ggEnergyGateMin = ggGateEnergyRelaxed - ggGateHalfWidth;
-         double ggEnergyGateMax = ggGateEnergyRelaxed + ggGateHalfWidth;
-
-         if (grif1->GetTime() > grif2->GetTime())
-         {
-            ggTime = grif1->GetTime() - grif2->GetTime();
-         }
-         else
-         {
-            ggTime = grif2->GetTime() - grif1->GetTime();
-         }
-
-         // --- gg matrix
-         if (ggTime > gateGammaDelayWindowStart && ggTime < gateGammaDelayWindowEnd)
-         {
-            double ggEnergy = grif1->GetEnergy() + grif2->GetEnergy();
-            if (ggEnergy > ggEnergyGateMin && ggEnergy < ggEnergyGateMax)
-            {
-               fH2[slot].at("ggMatrixTiming")->Fill(ggTime, ggEnergy);
-               fH2[slot].at("ggMatrix")->Fill(grif1->GetEnergy(), grif2->GetEnergy());
-               fH2[slot].at("ggMatrix")->Fill(grif2->GetEnergy(), grif1->GetEnergy());
-            }
-
-            if (ggEnergy < ggGateEnergyStrict)
-            {
-               fH2[slot].at("ggMatrixTimingStrict")->Fill(ggTime, ggEnergy);
-               fH2[slot].at("ggMatrixStrict")->Fill(grif1->GetEnergy(), grif2->GetEnergy());
-               fH2[slot].at("ggMatrixStrict")->Fill(grif2->GetEnergy(), grif1->GetEnergy());
-            }
-         }
+         fH1[slot].at("angleDiagnostic")->Fill(g1g2Angle);
 
          // --- Third gamma
          for (auto g3 = g2 + 1; g3 < grif.GetSuppressedMultiplicity(&grifBgo); ++g3)
@@ -198,165 +152,161 @@ void TriplePhotonCoincidenceHelper::Exec(unsigned int slot, TGriffin &grif, TGri
                continue;
             }
 
-            fH2[slot].at("gggHitPattern")->Fill(grif1->GetArrayNumber(), grif2->GetArrayNumber());
-            fH2[slot].at("gggHitPattern")->Fill(grif1->GetArrayNumber(), grif3->GetArrayNumber());
-            fH2[slot].at("gggHitPattern")->Fill(grif2->GetArrayNumber(), grif3->GetArrayNumber());
+            fH1[slot].at("angleDiagnostic")->Fill(g1g3Angle);
+            fH1[slot].at("angleDiagnostic")->Fill(g2g3Angle);
 
-            auto g1g3AngleIndex = fAngleMap.lower_bound(g1g3Angle - 0.0005);
-            double g1g3TimeDiff = grif3->GetTime() - grif1->GetTime();
-
-            auto g2g3AngleIndex = fAngleMap.lower_bound(g2g3Angle - 0.0005);
-            double g2g3TimeDiff = grif3->GetTime() - grif2->GetTime();
-
-            double totalEnergy = grif1->GetEnergy() + grif2->GetEnergy() + grif3->GetEnergy();
-
-            double totalEnergyMin = nuclearLevelEnergy - nuclearLevelEnergyBuffer;
-            double totalEnergyMax = qValue;
-
-            if (reduceTotalEnergy)
+            // --- Fourth gamma
+            for (auto g4 = g3 + 1; g4 < grif.GetSuppressedMultiplicity(&grifBgo); ++g4)
             {
-               totalEnergyMin -= totalEnergyReduction;
-            }
 
-            if (totalEnergy > totalEnergyMin && totalEnergy < totalEnergyMax)
-            {
-               fH1[slot].at("gEnergyTotal")->Fill(totalEnergy);
+               auto grif4 = grif.GetSuppressedHit(g4);
 
-               // -- There may be a better way to do this but I can't think of one
-               std::vector<TGriffinHit *> hits = {grif1, grif2, grif3};
-               double twoPhotonTime;
-               double timingHit, gateTime;
-               double hit1Hit2Time, hit1Hit3Time, hit2Hit3Time;
+               double calibratedEnergyGrif4 = ApplySplitCalibration(grif4);
 
-               // -- first check for two photon concidence
-               for (size_t i = 0; i < hits.size(); ++i)
+               // --- sets energy floor at minimum value;
+               if (calibratedEnergyGrif4 < gammaMinimumEnergy)
                {
-                  double hit1Time = hits[i]->GetTime();
-                  double hit1Energy = hits[i]->GetEnergy();
-                  for (size_t j = i + 1; j < hits.size(); ++j)
+                  continue;
+               }
+
+               double g1g4Angle = grif1->GetPosition(145.).Angle(grif4->GetPosition(145.)) * 180. / TMath::Pi();
+               double g2g4Angle = grif2->GetPosition(145.).Angle(grif4->GetPosition(145.)) * 180. / TMath::Pi();
+               double g3g4Angle = grif3->GetPosition(145.).Angle(grif4->GetPosition(145.)) * 180. / TMath::Pi();
+
+               // --- remove intraclover scatters
+               if (g1g4Angle < minimumScatterAngle || g2g4Angle < minimumScatterAngle || g3g4Angle < minimumScatterAngle)
+               {
+                  continue;
+               }
+
+               fH1[slot].at("angleDiagnostic")->Fill(g1g4Angle);
+               fH1[slot].at("angleDiagnostic")->Fill(g2g4Angle);
+               fH1[slot].at("angleDiagnostic")->Fill(g3g4Angle);
+
+               double totalEnergy = grif1->GetEnergy() + grif2->GetEnergy() + grif3->GetEnergy() + grif4->GetEnergy();
+
+               double totalEnergyMin = nuclearLevelEnergy - nuclearLevelEnergyBuffer;
+               double totalEnergyMax = qValue;
+
+               if (setTotalEnergyFloor)
+               {
+                  totalEnergyMin -= expectedTwoPhotonEnergy;
+               }
+
+               if (totalEnergy > totalEnergyMin && totalEnergy < totalEnergyMax)
+               {
+                  fH1[slot].at("gEnergyTotal")->Fill(totalEnergy);
+
+                  // -- There may be a better way to do this but I can't think of one
+                  std::vector<TGriffinHit *> hits = {grif1, grif2, grif3, grif4};
+                  double twoPhotonTime = -1;
+                  double timingHit, gateTime1, gateTime2;
+
+                  // -- first check for two photon concidence
+                  for (size_t i = 0; i < hits.size(); ++i)
                   {
-                     double hit2Time = hits[j]->GetTime();
-                     double hit2Energy = hits[j]->GetEnergy();
-                     // -- timing is not symmetric so Abs() is not reasonable
-                     if (hit1Time > hit2Time)
+                     double hit1Time = hits[i]->GetTime();
+                     for (size_t j = i + 1; j < hits.size(); ++j)
                      {
-                        timingHit = hit1Time;
-                        twoPhotonTime = hit1Time - hit2Time;
-                     }
-                     else
-                     {
-                        timingHit = hit2Time;
-                        twoPhotonTime = hit2Time - hit1Time;
-                     }
-
-                     // --- two photon coincidence
-                     if (twoPhotonTime < twoPhotonCoincidenceTime)
-                     {
-                        double sumEnergy = hit1Energy + hit2Energy;
-                        fH2[slot].at("ggTiming")->Fill(twoPhotonTime, sumEnergy);
-
-                        // -- next check for delayed gate photons
-                        // -- photon 3
-                        for (size_t k = 0; k < hits.size(); ++k)
+                        double hit2Time = hits[j]->GetTime();
+                        // -- timing is not symmetric so Abs() is not reasonable
+                        if (hit1Time > hit2Time)
                         {
-                           if (k != i && k != j)
-                           {
-                              double hit3Time = hits[k]->GetTime();
-                              double hit3Energy = hits[k]->GetEnergy();
-
-                              if (hit3Time > timingHit)
-                              {
-                                 gateTime = hit3Time - timingHit;
-                              }
-                              else
-                              {
-                                 gateTime = timingHit - hit3Time;
-                              }
-
-                              if (gateTime > gateGammaDelayWindowStart && gateTime < gateGammaDelayWindowEnd)
-                              {
-                                 fH2[slot].at("gggTiming")->Fill(gateTime, sumEnergy);
-
-                                 // -- select correct cascade
-                                 if (hit3Energy > (firstEnergyGate - energyGateHalfWidth) && hit3Energy < (firstEnergyGate + energyGateHalfWidth))
-                                 {
-                                    fH2[slot].at("gggSumEnergy")->Fill(hits[i]->GetEnergy(), sumEnergy);
-                                 } // end gateGammaDelayWindow
-                              }
-                           } // end photon 3
+                           timingHit = hit1Time;
+                           twoPhotonTime = hit1Time - hit2Time;
                         }
-                     } // end twoPhotonCoincidenceTime
-
-                     // --- two energy gates
-                     if (useSecondEnergyGate)
-                     {
-                        // -- photon 3
-                        for (size_t k = 0; k < hits.size(); ++k)
+                        else
                         {
-                           if (k != i && k != j)
+                           timingHit = hit2Time;
+                           twoPhotonTime = hit2Time - hit1Time;
+                        }
+
+                        if (twoPhotonTime < twoPhotonCoincidenceTime)
+                        {
+                           double sumEnergy = hits[i]->GetEnergy() + hits[j]->GetEnergy();
+                           double gamma1Energy = hits[i]->GetEnergy();
+                           fH2[slot].at("ggTiming")->Fill(twoPhotonTime, sumEnergy);
+
+                           // -- next check for delayed gate photons
+                           // -- photon 3
+                           for (size_t k = 0; k < hits.size(); ++k)
                            {
-                              double hit3Time = hits[k]->GetTime();
-                              double hit3Energy = hits[k]->GetEnergy();
-                              hit1Hit2Time = twoPhotonTime;
+                              if (k != i && k != j)
+                              {
+                                 double hit3Time = hits[k]->GetTime();
+                                 double hit3Energy = hits[k]->GetEnergy();
 
-                              if (hit3Time > hit1Time)
-                              {
-                                 hit1Hit3Time = hit3Time - hit1Time;
-                              }
-                              else
-                              {
-                                 hit1Hit3Time = hit1Time - hit3Time;
-                              }
-
-                              if (hit3Time > hit2Time)
-                              {
-                                 hit2Hit3Time = hit3Time - hit2Time;
-                              }
-                              else
-                              {
-                                 hit2Hit3Time = hit2Time - hit3Time;
-                              }
-
-                              // --- check timing first
-                              if (hit1Hit2Time > gateGammaDelayWindowStart && hit1Hit2Time < gateGammaDelayWindowEnd)
-                              {
-                                 if (hit1Hit3Time > gateGammaDelayWindowStart && hit1Hit3Time < gateGammaDelayWindowEnd)
+                                 if (hit3Time > timingHit)
                                  {
-                                    if (hit2Hit3Time > gateGammaDelayWindowStart && hit2Hit3Time < gateGammaDelayWindowEnd)
+                                    gateTime1 = hit3Time - timingHit;
+                                 }
+                                 else
+                                 {
+                                    gateTime1 = timingHit - hit3Time;
+                                 }
+
+                                 // -- photon 4
+                                 for (size_t l = k + 1; l < hits.size(); ++l)
+                                 {
+                                    if (l != i && l != j)
                                     {
-                                       fH2[slot].at("gggTimingWithFloor")->Fill(hit1Hit2Time, totalEnergy);
-                                       fH2[slot].at("gggTimingWithFloor")->Fill(hit1Hit3Time, totalEnergy);
-                                       fH2[slot].at("gggTimingWithFloor")->Fill(hit2Hit3Time, totalEnergy);
+                                       double hit4Time = hits[l]->GetTime();
+                                       double hit4Energy = hits[l]->GetEnergy();
 
-                                       // --- then check energy gates
-                                       if (hit1Energy > (firstEnergyGate - energyGateHalfWidth) && hit1Energy < (firstEnergyGate + energyGateHalfWidth))
+                                       if (hit4Time > timingHit)
                                        {
-                                          if (hit2Energy > (secondEnergyGate - energyGateHalfWidth) && hit2Energy < (secondEnergyGate + energyGateHalfWidth))
+                                          gateTime2 = hit4Time - timingHit;
+                                       }
+                                       else
+                                       {
+                                          gateTime2 = timingHit - hit4Time;
+                                       }
+
+                                       if (gateTime1 > gateGammaDelayWindowStart && gateTime1 < gateGammaDelayWindowEnd && gateTime2 > gateGammaDelayWindowStart && gateTime2 < gateGammaDelayWindowEnd)
+                                       {
+                                          fH2[slot].at("ggggTiming")->Fill(gateTime1, sumEnergy);
+                                          fH2[slot].at("ggggTiming")->Fill(gateTime2, sumEnergy);
+
+                                          // -- select correct cascade
+                                          // --- gate 3 first transition, gate 4 second transition
+                                          if (hit3Energy > (gateEnergy2 - gateEnergyHalfWidth) && hit3Energy < (gateEnergy2 + gateEnergyHalfWidth))
                                           {
-                                             fH1[slot].at("gggEnergy")->Fill(hit3Energy);
-                                          } // --  end energy gate 2
-                                       }    // -- end energy gate 1
-                                       if (hit1Energy > (secondEnergyGate - energyGateHalfWidth) && hit1Energy < (secondEnergyGate + energyGateHalfWidth))
-                                       {
-                                          fH1[slot].at("ggEnergy")->Fill(hit3Energy);
-                                       } // -- end second gate only
-                                    }    // -- end timing gate 3
-                                 }       // -- end timing gate 2
-                              }          // -- end timing gate 1
-                           }             // -- end photon 3
-                        }
-                     } // -- end second energy gate
-                     // -- ended here, remove comment once done
+                                             fH2[slot].at("ggggSumEnergy")->Fill(sumEnergy, gamma1Energy);
 
-                  } // end photon 2
-               }    // end photon 1
-            }       // end totalEnergy
-         }          // end third gamma
-      }             // end second gamma
-   }                // end first gamma
+                                             if (useSecondGate && hit4Energy > (gateEnergy1 - gateEnergyHalfWidth) && hit4Energy < (gateEnergy1 + gateEnergyHalfWidth))
+                                             {
+                                                fH2[slot].at("ggggSumEnergy2Gates")->Fill(sumEnergy, gamma1Energy);
+                                             }
+                                          } // end hit3 first transition, hit 4 second transition
+
+                                          // --- gate 4 first transition, gate 3 second transition
+                                          if (hit4Energy > (gateEnergy2 - gateEnergyHalfWidth) && hit4Energy < (gateEnergy2 + gateEnergyHalfWidth))
+                                          {
+                                             fH2[slot].at("ggggSumEnergy")->Fill(sumEnergy, gamma1Energy);
+
+                                             if (useSecondGate && hit3Energy > (gateEnergy1 - gateEnergyHalfWidth) && hit3Energy < (gateEnergy1 + gateEnergyHalfWidth))
+                                             {
+                                                fH2[slot].at("ggggSumEnergy2Gates")->Fill(sumEnergy, gamma1Energy);
+                                             }
+                                          } // end hit3 first transition, hit 4 second transition
+
+                                       } // end gateGammaDelayWindow
+                                    }    // end photon 4
+                                 }
+                              } // end photon 3
+                           }
+                        } // end twoPhotonCoincidenceTime
+                     }    // end photon 2
+                  }       // end photon 1
+               }          // end totalEnergy
+
+            } // end fourth gamma
+         }    // end third gamma
+      }       // end second gamma
+   }          // end first gamma
 }
 
-double TriplePhotonCoincidenceHelper::ApplySplitCalibration(TGriffinHit *grifHit)
+double QuadPhotonCoincidenceHelper::ApplySplitCalibration(TGriffinHit *grifHit)
 {
    double charge = grifHit->GetCharge();
    int detector = grifHit->GetArrayNumber();
@@ -409,7 +359,7 @@ double TriplePhotonCoincidenceHelper::ApplySplitCalibration(TGriffinHit *grifHit
 
 } // end ApplySplitCalibration
 
-Addback_t TriplePhotonCoincidenceHelper::GetAddback(TGriffin &grif, TGriffinBgo &grifBgo)
+Addback_t QuadPhotonCoincidenceHelper::GetAddback(TGriffin &grif, TGriffinBgo &grifBgo)
 {
 
    Addback_t addbackData;

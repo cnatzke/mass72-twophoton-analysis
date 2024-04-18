@@ -1,5 +1,5 @@
-#ifndef SummingCorrectionHelper_h
-#define SummingCorrectionHelper_h
+#ifndef QuadPhotonCoincidenceHelper_h
+#define QuadPhotonCoincidenceHelper_h
 
 // Header file for the classes stored in the TTree if any.
 #include "TGriffin.h"
@@ -13,20 +13,19 @@ struct Addback_t
 {
    std::vector<Double_t> energyCTCorrected;
    std::vector<Double_t> energy;
-   std::vector<Double_t> energyIndividual;
    std::vector<Long_t> time;
    std::vector<Long_t> timestamp;
    std::vector<Int_t> clover;
 };
 
 // function to calculate angles (from LeanCorrelations), implemented at the end of this file
-std::vector<std::pair<double, int>> AngleCombinations(double distance = 110., bool folding = false,
+std::vector<std::pair<double, int>> AngleCombinations(double distance = 145., bool folding = false,
                                                       bool addback = false);
 
 std::vector<float> fAngularBinVec;
 
-class SummingCorrectionHelper : public TGRSIHelper,
-                                public ROOT::Detail::RDF::RActionImpl<SummingCorrectionHelper>
+class QuadPhotonCoincidenceHelper : public TGRSIHelper,
+                                    public ROOT::Detail::RDF::RActionImpl<QuadPhotonCoincidenceHelper>
 {
 private:
    std::vector<std::pair<double, int>> fAngleCombinations;
@@ -35,34 +34,13 @@ private:
    std::map<double, int> fAngleMapAddback; // with addback
 
    TGriffin fLastGrif;
-   // static const struct Addback_t fEmptyStruct;
 
-   double ApplySplitCalibration(TGriffinHit *grifHit, bool lowEnergyCalibration);
+   double ApplySplitCalibration(TGriffinHit *grifHit);
    bool DefaultGriffinAddback(TGriffinHit *one, TGriffinHit *two);
    Addback_t GetAddback(TGriffin &grif, TGriffinBgo &grifBgo);
-   bool HasDuplicate(const std::vector<int> &vec);
-
-   // Gets Back to back detectors for addback
-   bool p180[16][16] = {
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false},
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true},
-       {false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false},
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false},
-       {false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false},
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-       {false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false},
-       {false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false},
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-       {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-       {false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false},
-       {false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false},
-       {false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false},
-       {true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-       {false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false}};
 
 public:
-   SummingCorrectionHelper(TList *list) : TGRSIHelper(list)
+   QuadPhotonCoincidenceHelper(TList *list) : TGRSIHelper(list)
    {
       Prefix("run");
       // calculate angle combinations
@@ -90,7 +68,7 @@ public:
 #endif
 
 // These are needed functions used by TDataFrameLibrary to create and destroy the instance of this TimingInvestigationHelper
-extern "C" SummingCorrectionHelper *CreateHelper(TList *list) { return new SummingCorrectionHelper(list); }
+extern "C" QuadPhotonCoincidenceHelper *CreateHelper(TList *list) { return new QuadPhotonCoincidenceHelper(list); }
 
 extern "C" void DestroyHelper(TGRSIHelper *helper) { delete helper; }
 
